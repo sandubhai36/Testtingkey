@@ -99,8 +99,13 @@ document.addEventListener('DOMContentLoaded', () => {
             })
         });
 
-        if (!response.ok) {
+        if (response.status === 429) {
+            console.warn('Rate limit exceeded. Retrying...');
             return false;
+        }
+
+        if (!response.ok) {
+            throw new Error('Failed to emulate progress');
         }
 
         const data = await response.json();
@@ -118,6 +123,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 promoId
             })
         });
+
+        if (response.status === 429) {
+            console.warn('Rate limit exceeded. Retrying...');
+            return null;
+        }
 
         if (!response.ok) {
             throw new Error('Failed to generate key');
@@ -195,9 +205,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 return null;
             }
 
+            let hasCode = false;
             for (let i = 0; i < 11; i++) {
                 await sleep(EVENTS_DELAY * delayRandom());
-                const hasCode = await emulateProgress(clientToken, game.promoId);
+                try {
+                    hasCode = await emulateProgress(clientToken, game.promoId);
+                } catch (error) {
+                    console.error('Error during progress emulation:', error.message);
+                }
                 updateProgress(7 / keyCount, 'Emulating progress...');
                 if (hasCode) {
                     break;
@@ -206,20 +221,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 const key = await generateKey(clientToken, game.promoId);
-                updateProgress(30 / keyCount, 'Generating key...');
-                return key;
-            } catch (error) {
-                alert(`Failed to generate key: ${error.message}`);
-                return null;
-            }
-        };
-
-        const keys = await Promise.all(Array.from({ length: keyCount }, generateKeyProcess));
-
-        storedData.count += keys.length;
-        storedData.keys.push(...keys.filter(key => key));
-        localStorage.setItem(storageKey, JSON.stringify(storedData));
-
-        if (keys.length > 1) {
-            keysList.innerHTML = keys.filter(key => key).map(key =>
-                `<div class="key-item">
